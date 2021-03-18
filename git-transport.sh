@@ -11,7 +11,7 @@ exec python $0 ${1+"$@"}
 ## Copyright (c) 2020, OneframeMobile, KoçSistem
 ## Email: oneframemobile@gmail.com
 ############################################################
-## Version: 0.1.0
+## Version: 1.0.0
 ############################################################
 
 import os
@@ -27,7 +27,7 @@ import base64
 
 def getCurrentRepositories():
     repositories = []
-    azure_devops_api_url = "source_repo_azure_devops/_apis/git/repositories?api-version=4.1"
+    azure_devops_api_url = "azure_devops_url/_apis/git/repositories?api-version=4.1"
     username = "user_name"
     password = "token_key"
     requestConfig = {
@@ -66,12 +66,43 @@ def getCurrentRepositories():
 
 
 
+def createFolderAndCloneSourceRepo(repo_folder, repo_url):
+    os.system("mkdir " + repo_folder)
+    #git clone old repo 
+    git_clone_old_repo_cmd = "git -C " + repo_folder + " clone --mirror " + repo_url
+    os.system(git_clone_old_repo_cmd)
+
+
+def createTargetByRepoAZCLI(repo_name, target_project_name):
+    #create repo on target repo (azure cloud) with azure cli
+    az_create_repo_cli_cmd = "az repos create --name " + repo_name + " --project " + target_project_name
+    os.system(az_create_repo_cli_cmd)
+
+def pushRemoteTargetRepo(repo_name, repo_folder_git_path):
+    origin_name = "your_origin"
+    #git remote add new-origin <url_of_new_repo>
+    target_git_new_repo_url = "git@ssh.dev.azure.com:v3/{organization}/{project_name}/" + repo_name
+    print(target_git_new_repo_url, repo_folder_git_path)
+
+    #check exist config file - append on constantly remote origin
+    if os.path.exists(repo_folder + "/" + repo.get("name") + ".git/config"):
+        #git remote set-url origin ssh://newhost.com/usr/local/gitroot/myproject.git
+        remote_origin_command = "git -C " + repo_folder_git_path + "remote rm " + origin_name
+        os.system(remote_origin_command)
+        #git_remote_add_new_origin_cmd = "git -C " + repo_folder_git_path + " remote add azuredevops " + target_git_new_repo_url
+        git_remote_add_new_origin_cmd = "git -C " + repo_folder_git_path + " remote add " + origin_name +  " " + target_git_new_repo_url
+        os.system(git_remote_add_new_origin_cmd)
+        
+    os.system("git -C " + repo_folder_git_path + " push " + origin_name + " --mirror")
+    os.system("cd ..")
+
+
 #coding start
 #git-transport
 if len(sys.argv) >= 0:
-    param1 = str(sys.argv[1])
-    param2 = str(sys.argv[2])
-    
+    #param1 = str(sys.argv[1])
+    #param2 = str(sys.argv[2])
+    target_project_name = "add_project_name"
     # get internal azure devops repositories with azure devops api (source repo)
     repositrories = getCurrentRepositories()
     
@@ -81,22 +112,17 @@ if len(sys.argv) >= 0:
     for repo in repositrories:
         #initialize folder structure
         repo_folder = os.getcwd() + "/" + repo.get("name")
-        os.system("mkdir " + repo_folder)
-        #git clone old repo 
-        git_clone_old_repo_cmd = "git -C " + repo_folder + " clone --mirror " + repo.get("url")
-        os.system(git_clone_old_repo_cmd)
+        repo_folder_git_path = repo_folder + "/" +  repo.get("name") + ".git "
+
+        #check exist cloned repo
+        if not os.path.exists(repo_folder_git_path):
+            createFolderAndCloneSourceRepo(repo_folder = repo_folder, repo_url = repo.get("url"))
 
         #create repo on target repo (azure cloud) with azure cli
-        target_project_name = "target_project_name"
-        az_create_repo_cli_cmd = "az repos create --name " + repo.get("name") + " --project " + target_project_name
-        os.system(az_create_repo_cli_cmd)
-
-        #git remote add new-origin <url_of_new_repo>
-        target_git_new_repo_url = "git@ssh.dev.azure.com:v3/{organization}/{project}/" + repo.get("name") 
-        git_remote_add_new_origin_cmd = "git -C " + repo_folder + "/" +  repo.get("name") + ".git " + " remote add azuredevops " + target_git_new_repo_url
-        os.system(git_remote_add_new_origin_cmd)
-        os.system("git -C " + repo_folder + "/" +  repo.get("name") + ".git" + " push azuredevops --mirror")
-        os.system("cd ..")
+        createTargetByRepoAZCLI(repo_name = repo.get("name"), target_project_name = target_project_name)
+    
+        #push git remote add new-origin <url_of_new_repo>
+        pushRemoteTargetRepo(repo_name = repo.get("name"), repo_folder_git_path = repo_folder_git_path)
 
 else:
     print("encapsulateFramework -framework_name")
